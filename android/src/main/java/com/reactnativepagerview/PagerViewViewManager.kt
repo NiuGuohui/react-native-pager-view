@@ -18,14 +18,15 @@ import com.reactnativepagerview.event.PageScrollStateChangedEvent
 import com.reactnativepagerview.event.PageSelectedEvent
 
 
-class PagerViewViewManager : ViewGroupManager<ViewPager2>() {
+class PagerViewViewManager : ViewGroupManager<NestedScrollableHost>() {
   private lateinit var eventDispatcher: EventDispatcher
 
   override fun getName(): String {
     return REACT_CLASS
   }
 
-  override fun createViewInstance(reactContext: ThemedReactContext): ViewPager2 {
+  override fun createViewInstance(reactContext: ThemedReactContext): NestedScrollableHost {
+    val host = NestedScrollableHost(reactContext)
     val vp = ViewPager2(reactContext)
     val adapter = FragmentAdapter((reactContext.currentActivity as FragmentActivity?)!!)
     vp.adapter = adapter
@@ -35,12 +36,12 @@ class PagerViewViewManager : ViewGroupManager<ViewPager2>() {
     vp.registerOnPageChangeCallback(object : OnPageChangeCallback() {
       override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
         eventDispatcher.dispatchEvent(
-          PageScrollEvent(vp.id, position, positionOffset))
+                PageScrollEvent(host.id, position, positionOffset))
       }
 
       override fun onPageSelected(position: Int) {
         eventDispatcher.dispatchEvent(
-          PageSelectedEvent(vp.id, position))
+                PageSelectedEvent(host.id, position))
       }
 
       override fun onPageScrollStateChanged(state: Int) {
@@ -51,35 +52,42 @@ class PagerViewViewManager : ViewGroupManager<ViewPager2>() {
           else -> throw IllegalStateException("Unsupported pageScrollState")
         }
         eventDispatcher.dispatchEvent(
-          PageScrollStateChangedEvent(vp.id, pageScrollState))
+                PageScrollStateChangedEvent(host.id, pageScrollState))
       }
     })
-    return vp
+    host.addView(vp)
+    return host
   }
+
+  private fun getViewPager(view: NestedScrollableHost) = view.getChildAt(0) as ViewPager2
 
   private fun setCurrentItem(view: ViewPager2, selectedTab: Int, scrollSmooth: Boolean) {
     view.post { updateLayoutView(view) }
     view.setCurrentItem(selectedTab, scrollSmooth)
   }
 
-  override fun addView(parent: ViewPager2, child: View, index: Int) {
+  override fun addView(host: NestedScrollableHost, child: View, index: Int) {
+    val parent = getViewPager(host)
     val adapter = parent.adapter as FragmentAdapter
     adapter.addReactView(child, index)
     postNewChanges(parent)
   }
 
-  override fun getChildCount(parent: ViewPager2): Int {
-    return (parent.adapter as FragmentAdapter).getReactChildCount()
+  override fun getChildCount(parent: NestedScrollableHost): Int {
+    val view = getViewPager(parent)
+    return (view.adapter as FragmentAdapter).getReactChildCount()
   }
 
-  override fun getChildAt(parent: ViewPager2, index: Int): View {
-    return (parent.adapter as FragmentAdapter).getReactChildAt(index)
+  override fun getChildAt(parent: NestedScrollableHost, index: Int): View {
+    val view = getViewPager(parent)
+    return (view.adapter as FragmentAdapter).getReactChildAt(index)
   }
 
-  override fun removeViewAt(parent: ViewPager2, index: Int) {
-    val adapter = parent.adapter as FragmentAdapter
+  override fun removeViewAt(parent: NestedScrollableHost, index: Int) {
+    val view = getViewPager(parent)
+    val adapter = view.adapter as FragmentAdapter
     adapter.removeReactViewAt(index)
-    postNewChanges(parent)
+    postNewChanges(view)
   }
 
   override fun needsCustomLayoutForChildren(): Boolean {
@@ -87,48 +95,55 @@ class PagerViewViewManager : ViewGroupManager<ViewPager2>() {
   }
 
   @ReactProp(name = "count")
-  fun setCount(view: ViewPager2, count: Int) {
+  fun setCount(host: NestedScrollableHost, count: Int) {
+    val view = getViewPager(host)
     (view.adapter as FragmentAdapter).setCount(count)
   }
 
   @ReactProp(name = "scrollEnabled", defaultBoolean = true)
-  fun setScrollEnabled(viewPager: ViewPager2, value: Boolean) {
-    viewPager.isUserInputEnabled = value
+  fun setScrollEnabled(host: NestedScrollableHost, value: Boolean) {
+    val view = getViewPager(host)
+    view.isUserInputEnabled = value
   }
 
   @ReactProp(name = "orientation")
-  fun setOrientation(viewPager: ViewPager2, value: String) {
-    viewPager.orientation = if (value == "vertical") ViewPager2.ORIENTATION_VERTICAL else ViewPager2.ORIENTATION_HORIZONTAL
+  fun setOrientation(host: NestedScrollableHost, value: String) {
+    val view = getViewPager(host)
+    view.orientation = if (value == "vertical") ViewPager2.ORIENTATION_VERTICAL else ViewPager2.ORIENTATION_HORIZONTAL
   }
 
   @ReactProp(name = "offscreenPageLimit", defaultInt = ViewPager2.OFFSCREEN_PAGE_LIMIT_DEFAULT)
-  operator fun set(viewPager: ViewPager2, value: Int) {
-    viewPager.offscreenPageLimit = value
+  operator fun set(host: NestedScrollableHost, value: Int) {
+    val view = getViewPager(host)
+    view.offscreenPageLimit = value
   }
 
   @ReactProp(name = "offset")
-  fun setOffset(view: ViewPager2, offset: Int) {
+  fun setOffset(host: NestedScrollableHost, offset: Int) {
+    val view = getViewPager(host)
     (view.adapter as FragmentAdapter).setOffset(offset)
   }
 
   @ReactProp(name = "overScrollMode")
-  fun setOverScrollMode(viewPager: ViewPager2, value: String) {
-    val child = viewPager.getChildAt(0)
+  fun setOverScrollMode(host: NestedScrollableHost, value: String) {
+    val view = getViewPager(host)
+    val child = view.getChildAt(0)
     when (value) {
-        "never" -> {
-          child.overScrollMode = ViewPager2.OVER_SCROLL_NEVER
-        }
-        "always" -> {
-          child.overScrollMode = ViewPager2.OVER_SCROLL_ALWAYS
-        }
-        else -> {
-          child.overScrollMode = ViewPager2.OVER_SCROLL_IF_CONTENT_SCROLLS
-        }
+      "never" -> {
+        child.overScrollMode = ViewPager2.OVER_SCROLL_NEVER
+      }
+      "always" -> {
+        child.overScrollMode = ViewPager2.OVER_SCROLL_ALWAYS
+      }
+      else -> {
+        child.overScrollMode = ViewPager2.OVER_SCROLL_IF_CONTENT_SCROLLS
+      }
     }
   }
 
-  override fun onAfterUpdateTransaction(view: ViewPager2) {
-    super.onAfterUpdateTransaction(view)
+  override fun onAfterUpdateTransaction(host: NestedScrollableHost) {
+    super.onAfterUpdateTransaction(host)
+    val view = getViewPager(host)
     if ((view.adapter as FragmentAdapter).notifyAboutChanges()) {
       view.post { updateLayoutView(view) }
     }
@@ -136,26 +151,27 @@ class PagerViewViewManager : ViewGroupManager<ViewPager2>() {
 
   override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Map<String, String>> {
     return MapBuilder.of(
-      PageScrollEvent.EVENT_NAME, MapBuilder.of("registrationName", "onPageScroll"),
-      PageScrollStateChangedEvent.EVENT_NAME, MapBuilder.of("registrationName", "onPageScrollStateChanged"),
-      PageSelectedEvent.EVENT_NAME, MapBuilder.of("registrationName", "onPageSelected"))
+            PageScrollEvent.EVENT_NAME, MapBuilder.of("registrationName", "onPageScroll"),
+            PageScrollStateChangedEvent.EVENT_NAME, MapBuilder.of("registrationName", "onPageScrollStateChanged"),
+            PageSelectedEvent.EVENT_NAME, MapBuilder.of("registrationName", "onPageSelected"))
   }
 
   override fun getCommandsMap(): Map<String, Int>? {
     return MapBuilder.of(
-      "setPage",
-      COMMAND_SET_PAGE,
-      "setPageWithoutAnimation",
-      COMMAND_SET_PAGE_WITHOUT_ANIMATION,
-      "setScrollEnabled",
-      COMMAND_SET_SCROLL_ENABLED)
+            "setPage",
+            COMMAND_SET_PAGE,
+            "setPageWithoutAnimation",
+            COMMAND_SET_PAGE_WITHOUT_ANIMATION,
+            "setScrollEnabled",
+            COMMAND_SET_SCROLL_ENABLED)
   }
 
-  override fun receiveCommand(root: ViewPager2, commandId: Int, args: ReadableArray?) {
+  override fun receiveCommand(root: NestedScrollableHost, commandId: Int, args: ReadableArray?) {
     super.receiveCommand(root, commandId, args)
-    Assertions.assertNotNull(root)
+    val view = getViewPager(root)
+    Assertions.assertNotNull(view)
     Assertions.assertNotNull(args)
-    val childCount = root.adapter?.itemCount
+    val childCount = view.adapter?.itemCount
 
     when (commandId) {
       COMMAND_SET_PAGE, COMMAND_SET_PAGE_WITHOUT_ANIMATION -> {
@@ -163,22 +179,23 @@ class PagerViewViewManager : ViewGroupManager<ViewPager2>() {
         val canScroll = childCount != null && childCount > 0 && pageIndex >= 0 && pageIndex < childCount
         if (canScroll) {
           val scrollWithAnimation = commandId == COMMAND_SET_PAGE
-          setCurrentItem(root, pageIndex, scrollWithAnimation)
+          setCurrentItem(view, pageIndex, scrollWithAnimation)
           eventDispatcher.dispatchEvent(PageSelectedEvent(root.id, pageIndex))
         }
       }
       COMMAND_SET_SCROLL_ENABLED -> {
-        root.isUserInputEnabled = args!!.getBoolean(0)
+        view.isUserInputEnabled = args!!.getBoolean(0)
       }
       else -> throw IllegalArgumentException(String.format(
-        "Unsupported command %d received by %s.",
-        commandId,
-        javaClass.simpleName))
+              "Unsupported command %d received by %s.",
+              commandId,
+              javaClass.simpleName))
     }
   }
 
   @ReactProp(name = "pageMargin", defaultFloat = 0F)
-  fun setPageMargin(pager: ViewPager2, margin: Float) {
+  fun setPageMargin(host: NestedScrollableHost, margin: Float) {
+    val pager = getViewPager(host)
     val pageMargin = PixelUtil.toPixelFromDIP(margin).toInt()
     /**
      * Don't use MarginPageTransformer to be able to support negative margins
@@ -207,8 +224,8 @@ class PagerViewViewManager : ViewGroupManager<ViewPager2>() {
    */
   private fun updateLayoutView(view: View) {
     view.measure(
-      View.MeasureSpec.makeMeasureSpec(view.width, View.MeasureSpec.EXACTLY),
-      View.MeasureSpec.makeMeasureSpec(view.height, View.MeasureSpec.EXACTLY))
+            View.MeasureSpec.makeMeasureSpec(view.width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(view.height, View.MeasureSpec.EXACTLY))
     view.layout(view.left, view.top, view.right, view.bottom)
   }
 
