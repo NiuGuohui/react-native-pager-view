@@ -1,6 +1,7 @@
 package com.reactnativepagerview
 
 import android.view.View
+import android.view.ViewGroup
 import androidx.fragment.app.FragmentActivity
 import androidx.viewpager2.widget.ViewPager2
 import androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback
@@ -27,6 +28,8 @@ class PagerViewViewManager : ViewGroupManager<NestedScrollableHost>() {
 
   override fun createViewInstance(reactContext: ThemedReactContext): NestedScrollableHost {
     val host = NestedScrollableHost(reactContext)
+    host.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    host.isSaveEnabled = true
     val vp = ViewPager2(reactContext)
     val adapter = FragmentAdapter((reactContext.currentActivity as FragmentActivity?)!!)
     vp.adapter = adapter
@@ -59,7 +62,13 @@ class PagerViewViewManager : ViewGroupManager<NestedScrollableHost>() {
     return host
   }
 
-  private fun getViewPager(view: NestedScrollableHost) = view.getChildAt(0) as ViewPager2
+  private fun getViewPager(view: NestedScrollableHost): ViewPager2 {
+    if (view.getChildAt(0) is ViewPager2) {
+      return view.getChildAt(0) as ViewPager2
+    } else {
+      throw ClassNotFoundException("Could not retrieve ViewPager2 instance")
+    }
+  }
 
   private fun setCurrentItem(view: ViewPager2, selectedTab: Int, scrollSmooth: Boolean) {
     view.post { updateLayoutView(view) }
@@ -102,20 +111,17 @@ class PagerViewViewManager : ViewGroupManager<NestedScrollableHost>() {
 
   @ReactProp(name = "scrollEnabled", defaultBoolean = true)
   fun setScrollEnabled(host: NestedScrollableHost, value: Boolean) {
-    val view = getViewPager(host)
-    view.isUserInputEnabled = value
+    getViewPager(host).isUserInputEnabled = value
   }
 
   @ReactProp(name = "orientation")
   fun setOrientation(host: NestedScrollableHost, value: String) {
-    val view = getViewPager(host)
-    view.orientation = if (value == "vertical") ViewPager2.ORIENTATION_VERTICAL else ViewPager2.ORIENTATION_HORIZONTAL
+    getViewPager(host).orientation = if (value == "vertical") ViewPager2.ORIENTATION_VERTICAL else ViewPager2.ORIENTATION_HORIZONTAL
   }
 
   @ReactProp(name = "offscreenPageLimit", defaultInt = ViewPager2.OFFSCREEN_PAGE_LIMIT_DEFAULT)
   operator fun set(host: NestedScrollableHost, value: Int) {
-    val view = getViewPager(host)
-    view.offscreenPageLimit = value
+    getViewPager(host).offscreenPageLimit = value
   }
 
   @ReactProp(name = "offset")
